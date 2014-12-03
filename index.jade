@@ -1,0 +1,14 @@
+h1 ImageManipulator
+input(type="file", id="file-grabber")
+form(id="img-props")
+	label(for="img-scale") Image Scale:
+	input(type="number", id="img-scale") 1
+	input(type="checkbox", id="img-scale-dims", checked="checked")
+	button(id="img-scale-commit") Change Scale
+	label(for="img-size") Image Dimensions (crop)
+	input(type="number", id="img-width")
+	input(type="number", id="img-height")
+	button(id="img-dims-commit") Change Dimensions
+	button(id="img-dims-reset") Reset Dimensions To Image
+canvas(width="960", height="100", id="img-man-area")
+a(id="download-img", href="#") Download the image
