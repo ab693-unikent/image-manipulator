@@ -4,14 +4,20 @@
 //Global scope
 APP_DAT = {};
 
-function ImageGrabber(fileInput) {
+function ImageGrabber(fileInput, canvas) {
 	this.resolvers = {};
 	this.ret = new Promise(this.grabResolvers.bind(this));
 	this.grabPasteFunc = this.grabPaste.bind(this);
 	this.grabFileFunc = this.grabFile.bind(this);
+	this.grabDropFunc = this.grabDrop.bind(this);
 	this.fileInput = fileInput;
+	this.canvas = canvas;
+	
 	document.addEventListener("paste", this.grabPasteFunc, false);
 	this.fileInput.addEventListener("change", this.grabFileFunc, false);
+	this.canvas.addEventListener("dragenter", blockDefaultBehaviour, false);
+	this.canvas.addEventListener("dragover", blockDefaultBehaviour, false);
+	this.canvas.addEventListener("drop", this.grabDropFunc, false);
 
 	return this.ret;
 }
@@ -22,7 +28,7 @@ ImageGrabber.prototype.grabResolvers = function(resolve, reject) {
 }
 
 ImageGrabber.prototype.grabPaste = function(e) {
-	e.preventDefault();
+	blockDefaultBehaviour(e);
 	if (e.clipboardData) {
 		var items = e.clipboardData.items;
 		if (items) {
@@ -44,6 +50,22 @@ ImageGrabber.prototype.grabFile = function(e) {
 		}
 	} else {
 		this.resolvers.reject("An error occurred while selecting a file.");
+	}
+}
+
+ImageGrabber.prototype.grabDrop = function(e) {
+	blockDefaultBehaviour(e);
+	if (e.dataTransfer) {
+		var dt = e.dataTransfer;
+		if (dt.files) {
+			if (!this.handleDataList(dt.files)) {
+				this.resolvers.reject("No image was found in the dropped files.");
+			}
+		} else {
+			this.resolvers.reject("An error occurred while selecting dropped files.");
+		}
+	} else {
+		this.resolvers.reject("An error occurred while transferring dropped files.");
 	}
 }
 
@@ -70,6 +92,9 @@ ImageGrabber.prototype.handleImageData = function(imgDat) {
 ImageGrabber.prototype.destroy = function() {
 	document.removeEventListener("paste", this.grabPasteFunc);
 	this.fileInput.removeEventListener("change", this.grabFileFunc);
+	this.canvas.removeEventListener("dragenter", blockDefaultBehaviour);
+	this.canvas.removeEventListener("dragover", blockDefaultBehaviour);
+	this.canvas.removeEventListener("drop", this.grabDropFunc);
 	delete this.resolvers;
 }
 
@@ -131,7 +156,7 @@ function init() {
 	APP_DAT.form = {scale: document.querySelector("#img-scale"), scaleDims: document.querySelector("#img-scale-dims"), dims: {width: document.querySelector("#img-width"), height: document.querySelector("#img-height")}, commits: {scale: document.querySelector("#img-scale-commit"), dims: document.querySelector("#img-dims-commit"), resetDims: document.querySelector("#img-dims-reset")}};
 	APP_DAT.dwnldLnk = document.querySelector("#download-img");
 	APP_DAT.imgMan = new ImageManipulator(APP_DAT.canvas);
-	new ImageGrabber(APP_DAT.fileInput).then(APP_DAT.imgMan.drawImage.bind(APP_DAT.imgMan), alert.bind(window)).then(updateUI);
+	new ImageGrabber(APP_DAT.fileInput, APP_DAT.canvas).then(APP_DAT.imgMan.drawImage.bind(APP_DAT.imgMan), alert.bind(window)).then(updateUI);
 	
 	APP_DAT.dwnldLnk.addEventListener("click", downloadImg, false);
 	APP_DAT.form.commits.scale.addEventListener("click", scaleImage, false);
@@ -147,19 +172,19 @@ function downloadImg(e) {
 }
 
 function scaleImage(e) {
-	e.preventDefault();
+	blockDefaultBehaviour();
 	APP_DAT.imgMan.scaleImage(APP_DAT.form.scale.valueAsNumber, APP_DAT.form.scaleDims.checked);
 	updateUI();
 }
 
 function cropImage(e) {
-	e.preventDefault();
+	blockDefaultBehaviour();
 	APP_DAT.imgMan.cropImage(APP_DAT.form.dims.width.valueAsNumber, APP_DAT.form.dims.height.valueAsNumber);
 	updateUI();
 }
 
 function resetDims(e) {
-	e.preventDefault();
+	blockDefaultBehaviour();
 	APP_DAT.imgMan.resetImageDimensions();
 	updateUI();
 }
@@ -170,3 +195,7 @@ function updateUI() {
 	APP_DAT.form.dims.height.value = APP_DAT.imgMan.canvas.height;
 }
 
+function blockDefaultBehaviour(e) {
+	e.stopPropagation();
+	e.preventDefault();
+}
