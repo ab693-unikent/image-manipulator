@@ -59,7 +59,9 @@ ImageGrabber.prototype.grabDrop = function(e) {
 		var dt = e.dataTransfer;
 		if (dt.files) {
 			if (!this.handleDataList(dt.files)) {
-				this.resolvers.reject("No image was found in the dropped files.");
+                if (!this.handleHTMLData(dt.getData("text/html"))) {
+                    this.resolvers.reject("No image was found in the dropped files.");
+                }
 			}
 		} else {
 			this.resolvers.reject("An error occurred while selecting dropped files.");
@@ -71,13 +73,13 @@ ImageGrabber.prototype.grabDrop = function(e) {
 
 ImageGrabber.prototype.handleDataList = function(arr) {
 	for (var i = 0, len = arr.length; i < len; i++) {
-  		var datum = arr[i];
-  		if(datum.type.indexOf("image") !== -1) {
-  			this.handleImageData(datum);
-			return true;
-  		}
-  	}
-  	return false;
+        var datum = arr[i];
+        if(datum.type.indexOf("image") !== -1) {
+            this.handleImageData(datum);
+            return true;
+    }
+    }
+    return false;
 }
 
 ImageGrabber.prototype.handleImageData = function(imgDat) {
@@ -87,6 +89,19 @@ ImageGrabber.prototype.handleImageData = function(imgDat) {
 	var source = URLObj.createObjectURL(blob);
 	this.resolvers.resolve(source);
 	this.destroy();
+}
+
+ImageGrabber.prototype.handleHTMLData = function(htmlDat) {
+    var fakeElm = document.createElement("div");
+    fakeElm.innerHTML = htmlDat;
+    var img = fakeElm.querySelector("img");
+    if (img) {
+        this.resolvers.resolve(img.src);
+        this.destroy();
+        return true;
+    } else {
+        return false;   
+    }
 }
 
 ImageGrabber.prototype.destroy = function() {
@@ -103,6 +118,7 @@ function ImageManipulator(canvas) {
 	this.context = this.canvas.getContext("2d");
 	this.scale = 1;
 	this.origDims = {};
+	this.origPos = {};
 }
 
 ImageManipulator.prototype.drawImage = function(imgObjURL) {
@@ -112,9 +128,11 @@ ImageManipulator.prototype.drawImage = function(imgObjURL) {
 	var resolvers = {};
 	this.imgSrc.onload = function(){
 		_self.origDims = {width: _self.imgSrc.width, height: _self.imgSrc.height};
+		_self.scale = 1;
+		_self.currentPos = {x: 0, y: 0};
 		_self.canvas.width = _self.imgSrc.width;
 		_self.canvas.height = _self.imgSrc.height;
-		_self.context.drawImage(_self.imgSrc, 0, 0);
+		_self.context.drawImage(_self.imgSrc, _self.currentPos.x, _self.currentPos.y);
 		resolvers.resolve();
 		};
 	this.imgSrc.onerror = function() {resolvers.reject()};
@@ -123,7 +141,8 @@ ImageManipulator.prototype.drawImage = function(imgObjURL) {
 }
 
 ImageManipulator.prototype.redrawImage = function() {
-	this.context.drawImage(this.imgSrc, 0, 0, this.origDims.width * this.scale, this.origDims.height * this.scale);
+    this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+	this.context.drawImage(this.imgSrc, this.currentPos.x, this.currentPos.y, this.origDims.width * this.scale, this.origDims.height * this.scale);
 }
 
 ImageManipulator.prototype.scaleImage = function(scale, adjustDims) {
@@ -131,7 +150,6 @@ ImageManipulator.prototype.scaleImage = function(scale, adjustDims) {
 		this.canvas.width = this.canvas.width * (scale/this.scale);
 		this.canvas.height = this.canvas.height * (scale/this.scale);
 	}
-	this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
 	this.scale = scale;
 	this.redrawImage();
 }
@@ -144,6 +162,19 @@ ImageManipulator.prototype.cropImage = function(width, height) {
 
 ImageManipulator.prototype.resetImageDimensions = function() {
 	this.cropImage(this.origDims.width * this.scale, this.origDims.height * this.scale)
+}
+
+ImageManipulator.prototype.moveImage = function(x, y, adjustDims) {
+    this.currentPos = {x: x, y: y};
+    if (adjustDims) {
+        this.alignImageDimensions();   
+    }
+    this.redrawImage();
+}
+
+ImageManipulator.prototype.alignImageDimensions = function() {
+    this.canvas.width = this.canvas.width + this.currentPos.x;
+	this.canvas.height = this.canvas.height + this.currentPos.y;
 }
 
 ImageManipulator.prototype.getCanvasData = function() {
@@ -172,19 +203,25 @@ function downloadImg(e) {
 }
 
 function scaleImage(e) {
-	blockDefaultBehaviour();
+	blockDefaultBehaviour(e);
 	APP_DAT.imgMan.scaleImage(APP_DAT.form.scale.valueAsNumber, APP_DAT.form.scaleDims.checked);
 	updateUI();
 }
 
 function cropImage(e) {
-	blockDefaultBehaviour();
+	blockDefaultBehaviour(e);
 	APP_DAT.imgMan.cropImage(APP_DAT.form.dims.width.valueAsNumber, APP_DAT.form.dims.height.valueAsNumber);
 	updateUI();
 }
 
+function moveImage(e) {
+    blockDefaultBehaviour(e);
+    APP_DAT.imgMan.moveImage(APP_DAT.form.pos.x.valueAsNumber, APP_DAT.form.pos.y.valueAsNumber);
+    updateUI();
+}
+
 function resetDims(e) {
-	blockDefaultBehaviour();
+	blockDefaultBehaviour(e);
 	APP_DAT.imgMan.resetImageDimensions();
 	updateUI();
 }
@@ -193,6 +230,7 @@ function updateUI() {
 	APP_DAT.form.scale.value = APP_DAT.imgMan.scale;
 	APP_DAT.form.dims.width.value = APP_DAT.imgMan.canvas.width;
 	APP_DAT.form.dims.height.value = APP_DAT.imgMan.canvas.height;
+	//Add stuff here for moving
 }
 
 function blockDefaultBehaviour(e) {
